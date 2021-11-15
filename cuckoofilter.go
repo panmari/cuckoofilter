@@ -122,9 +122,11 @@ func (cf *Filter) LoadFactor() float64 {
 	return float64(cf.count) / float64(len(cf.buckets)*bucketSize)
 }
 
+const bytesPerBucket = bucketSize * fingerprintSizeBits / 8
+
 // Encode returns a byte slice representing a Cuckoofilter.
 func (cf *Filter) Encode() []byte {
-	bytes := make([]byte, 0, len(cf.buckets)*bucketSize*fingerprintSizeBits/8)
+	bytes := make([]byte, 0, len(cf.buckets)*bytesPerBucket)
 	for _, b := range cf.buckets {
 		for _, f := range b {
 			next := make([]byte, 2)
@@ -137,15 +139,22 @@ func (cf *Filter) Encode() []byte {
 
 // Decode returns a Cuckoofilter from a byte slice created using Encode.
 func Decode(bytes []byte) (*Filter, error) {
-	var count uint
 	if len(bytes)%bucketSize != 0 {
-		return nil, fmt.Errorf("expected bytes to be multiple of %d, got %d", bucketSize, len(bytes))
+		return nil, fmt.Errorf("bytes must to be multiple of %d, got %d", bucketSize, len(bytes))
 	}
-	buckets := make([]bucket, len(bytes)/bucketSize*8/fingerprintSizeBits)
+	numBuckets := len(bytes) / bytesPerBucket
+	if numBuckets < 1 {
+		return nil, fmt.Errorf("bytes can not be smaller than %d, size in bytes is %d", bytesPerBucket, len(bytes))
+	}
+	if getNextPow2(uint64(numBuckets)) != uint(numBuckets) {
+		return nil, fmt.Errorf("numBuckets must to be a power of 2, got %d", numBuckets)
+	}
+	var count uint
+	buckets := make([]bucket, numBuckets)
 	for i, b := range buckets {
 		for j := range b {
 			var next []byte
-			next, bytes = bytes[0:2], bytes[2:]
+			next, bytes = bytes[:2], bytes[2:]
 
 			if fp := fingerprint(binary.LittleEndian.Uint16(next)); fp != 0 {
 				buckets[i][j] = fp
