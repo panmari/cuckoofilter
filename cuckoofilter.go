@@ -35,11 +35,12 @@ type Filter interface {
 
 type filter[T fingerprintsize] struct {
 	buckets             []bucket[T]
-	fingerprintSizeBits uint64
+	fingerprintSizeBits int
 	count               uint
 	// Bit mask set to len(buckets) - 1. As len(buckets) is always a power of 2,
 	// applying this mask mimics the operation x % len(buckets).
 	bucketIndexMask uint
+	maxFingerprint  uint64
 }
 
 func numBuckets(numElements uint) uint {
@@ -67,6 +68,7 @@ func NewFilter(cfg Config) Filter {
 			count:               0,
 			bucketIndexMask:     uint(len(buckets) - 1),
 			fingerprintSizeBits: 8,
+			maxFingerprint:      uint64((1 << 8) - 1),
 		}
 	case High:
 		buckets := make([]bucket[uint32], numBuckets)
@@ -75,6 +77,7 @@ func NewFilter(cfg Config) Filter {
 			count:               0,
 			bucketIndexMask:     uint(len(buckets) - 1),
 			fingerprintSizeBits: 32,
+			maxFingerprint:      uint64((1 << 32) - 1),
 		}
 	default:
 		buckets := make([]bucket[uint16], numBuckets)
@@ -83,16 +86,17 @@ func NewFilter(cfg Config) Filter {
 			count:               0,
 			bucketIndexMask:     uint(len(buckets) - 1),
 			fingerprintSizeBits: 16,
+			maxFingerprint:      uint64((1 << 16) - 1),
 		}
 	}
 }
 
 func (cf *filter[T]) Lookup(data []byte) bool {
-	i1, fp := getIndexAndFingerprint[T](data, cf.bucketIndexMask, cf.fingerprintSizeBits)
+	i1, fp := getIndexAndFingerprint[T](data, cf.bucketIndexMask, cf.maxFingerprint, cf.fingerprintSizeBits)
 	if b := cf.buckets[i1]; b.contains(fp) {
 		return true
 	}
-	i2 := getAltIndex(fp, i1, cf.bucketIndexMask)
+	i2 := getAltIndex(fp, i1, cf.bucketIndexMask, cf.fingerprintSizeBits)
 	b := cf.buckets[i2]
 	return b.contains(fp)
 }
@@ -105,19 +109,19 @@ func (cf *filter[T]) Reset() {
 }
 
 func (cf *filter[T]) Insert(data []byte) bool {
-	i, fp := getIndexAndFingerprint[T](data, cf.bucketIndexMask, cf.fingerprintSizeBits)
+	i, fp := getIndexAndFingerprint[T](data, cf.bucketIndexMask, cf.maxFingerprint, cf.fingerprintSizeBits)
 	if cf.insertIntoBucket(fp, i) {
 		return true
 	}
 
 	// Apply cuckoo kickouts until a free space is found.
 	for k := 0; k < maxCuckooKickouts; k++ {
-		j := rand.Int63() & bucketSizeMask
+		j := rand.Intn(bucketSize)
 		// Swap fingerprint with bucket entry.
 		cf.buckets[i][j], fp = fp, cf.buckets[i][j]
 
 		// Move kicked out fingerprint to alternate location.
-		i = getAltIndex(fp, i, cf.bucketIndexMask)
+		i = getAltIndex(fp, i, cf.bucketIndexMask, cf.fingerprintSizeBits)
 		if cf.insertIntoBucket(fp, i) {
 			return true
 		}
@@ -134,8 +138,8 @@ func (cf *filter[T]) insertIntoBucket(fp T, i uint) bool {
 }
 
 func (cf *filter[T]) Delete(data []byte) bool {
-	i1, fp := getIndexAndFingerprint[T](data, cf.bucketIndexMask, cf.fingerprintSizeBits)
-	i2 := getAltIndex(fp, i1, cf.bucketIndexMask)
+	i1, fp := getIndexAndFingerprint[T](data, cf.bucketIndexMask, cf.maxFingerprint, cf.fingerprintSizeBits)
+	i2 := getAltIndex(fp, i1, cf.bucketIndexMask, cf.fingerprintSizeBits)
 	return cf.delete(fp, i1) || cf.delete(fp, i2)
 }
 

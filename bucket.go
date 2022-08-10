@@ -15,7 +15,6 @@ type bucket[T fingerprintsize] [bucketSize]T
 const (
 	nullFp     = 0
 	bucketSize = 4
-	bucketSizeMask = bucketSize - 1
 )
 
 // insert a fingerprint into a bucket. Returns true if there was enough space and insertion succeeded.
