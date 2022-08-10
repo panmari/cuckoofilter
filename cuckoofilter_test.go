@@ -2,10 +2,9 @@ package cuckoo
 
 import (
 	"bufio"
-	"crypto/rand"
 	"fmt"
-	"io"
 	"math"
+	"math/rand"
 	"os"
 	"testing"
 
@@ -105,12 +104,13 @@ func TestFilter_LookupLarge(t *testing.T) {
 
 func TestFilter_Insert(t *testing.T) {
 	filter := NewFilter(Config{NumElements: 10000})
+	rng := rand.New(rand.NewSource(int64(42)))
 
-	var hash [32]byte
+	hash := make([]byte, 32)
 
 	for i := 0; i < 100; i++ {
-		io.ReadFull(rand.Reader, hash[:])
-		filter.Insert(hash[:])
+		rng.Read(hash)
+		filter.Insert(hash)
 	}
 
 	if got, want := filter.Count(), uint(100); got != want {
@@ -127,13 +127,14 @@ func BenchmarkFilter_Reset(b *testing.B) {
 	}
 }
 
-// benchmarKeys returns a slice of keys for benchmarking with length `size`.
-func benchmarKeys(b *testing.B, size int) [][]byte {
+// benchmarkKeys returns a slice of keys for benchmarking with length `size`.
+func benchmarkKeys(b *testing.B, size int) [][]byte {
 	b.Helper()
 	keys := make([][]byte, size)
+	rng := rand.New(rand.NewSource(int64(size)))
 	for i := range keys {
 		keys[i] = make([]byte, 32)
-		if _, err := io.ReadFull(rand.Reader, keys[i]); err != nil {
+		if _, err := rng.Read(keys[i]); err != nil {
 			b.Error(err)
 		}
 	}
@@ -142,7 +143,7 @@ func benchmarKeys(b *testing.B, size int) [][]byte {
 
 func BenchmarkFilter_Insert(b *testing.B) {
 	const size = 10000
-	keys := benchmarKeys(b, int(float64(size)*0.8))
+	keys := benchmarkKeys(b, int(float64(size)*0.8))
 	b.ResetTimer()
 
 	for i := 0; i < b.N; {
@@ -158,7 +159,7 @@ func BenchmarkFilter_Insert(b *testing.B) {
 
 func BenchmarkFilter_Lookup(b *testing.B) {
 	filter := NewFilter(Config{NumElements: 10000})
-	keys := benchmarKeys(b, 10000)
+	keys := benchmarkKeys(b, 10000)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; {
