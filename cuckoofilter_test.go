@@ -226,23 +226,32 @@ func TestDeleteMultipleSame(t *testing.T) {
 }
 
 func TestEncodeDecode(t *testing.T) {
-	cf := NewFilter(Config{NumElements: 10})
-	cf.Insert([]byte{1})
-	cf.Insert([]byte{2})
-	cf.Insert([]byte{3})
-	cf.Insert([]byte{4})
-	cf.Insert([]byte{5})
-	cf.Insert([]byte{6})
-	cf.Insert([]byte{7})
-	cf.Insert([]byte{8})
-	cf.Insert([]byte{9})
-	encoded := cf.Encode()
-	got, err := Decode(encoded)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
+	testCases := []struct {
+		filter Filter
+	}{
+		{NewFilter(Config{NumElements: 10})},
+		{NewFilter(Config{NumElements: 10, Precision: Low})},
+		{NewFilter(Config{NumElements: 10, Precision: High})},
 	}
-	if !cmp.Equal(cf, got,
-		cmp.AllowUnexported(filter[uint16]{})) {
-		t.Errorf("Decode = %v, want %v, encoded = %v", got, cf, encoded)
+	for _, tc := range testCases {
+		cf := tc.filter
+		cf.Insert([]byte{1})
+		cf.Insert([]byte{2})
+		cf.Insert([]byte{3})
+		cf.Insert([]byte{4})
+		cf.Insert([]byte{5})
+		cf.Insert([]byte{6})
+		cf.Insert([]byte{7})
+		cf.Insert([]byte{8})
+		cf.Insert([]byte{9})
+		encoded := cf.Encode()
+		got, err := Decode(encoded)
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
+		if !cmp.Equal(cf, got,
+			cmp.AllowUnexported(filter[uint8]{}, filter[uint16]{}, filter[uint32]{})) {
+			t.Errorf("Decode = %v, want %v, encoded = %v", got, cf, encoded)
+		}
 	}
 }
