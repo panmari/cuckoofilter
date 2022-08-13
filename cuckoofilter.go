@@ -113,11 +113,26 @@ func (cf *filter[T]) Reset() {
 }
 
 func (cf *filter[T]) Insert(data []byte) bool {
-	i, fp := getIndexAndFingerprint[T](data, cf.bucketIndexMask, cf.maxFingerprintMinusOne, cf.fingerprintSizeBits)
-	if cf.insertIntoBucket(fp, i) {
+	i1, fp := getIndexAndFingerprint[T](data, cf.bucketIndexMask, cf.maxFingerprintMinusOne, cf.fingerprintSizeBits)
+	if cf.insertIntoBucket(fp, i1) {
 		return true
 	}
+	i2 := getAltIndex(fp, i1, cf.bucketIndexMask)
+	if cf.insertIntoBucket(fp, i2) {
+		return true
+	}
+	return cf.cuckooInsert(fp, i1)
+}
 
+func (cf *filter[T]) insertIntoBucket(fp T, i uint) bool {
+	if cf.buckets[i].insert(fp) {
+		cf.count++
+		return true
+	}
+	return false
+}
+
+func (cf *filter[T]) cuckooInsert(fp T, i uint) bool {
 	// Apply cuckoo kickouts until a free space is found.
 	for k := 0; k < maxCuckooKickouts; k++ {
 		j := rand.Intn(bucketSize)
@@ -129,14 +144,6 @@ func (cf *filter[T]) Insert(data []byte) bool {
 		if cf.insertIntoBucket(fp, i) {
 			return true
 		}
-	}
-	return false
-}
-
-func (cf *filter[T]) insertIntoBucket(fp T, i uint) bool {
-	if cf.buckets[i].insert(fp) {
-		cf.count++
-		return true
 	}
 	return false
 }
