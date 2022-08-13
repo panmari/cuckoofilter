@@ -7,8 +7,7 @@ import (
 	"testing"
 )
 
-func FuzzDecode(f *testing.F) {
-	cf := NewFilter(Config{NumElements: 10})
+func filledFilter(cf Filter) Filter {
 	cf.Insert([]byte{1})
 	cf.Insert([]byte{2})
 	cf.Insert([]byte{3})
@@ -18,7 +17,13 @@ func FuzzDecode(f *testing.F) {
 	cf.Insert([]byte{7})
 	cf.Insert([]byte{8})
 	cf.Insert([]byte{9})
-	f.Add(cf.Encode())
+	return cf
+}
+
+func FuzzDecode(f *testing.F) {
+	f.Add(filledFilter(NewFilter(Config{NumElements: 10})).Encode())
+	f.Add(filledFilter(NewFilter(Config{NumElements: 10, Precision: Low})).Encode())
+	f.Add(filledFilter(NewFilter(Config{NumElements: 10, Precision: High})).Encode())
 	f.Fuzz(func(t *testing.T, encoded []byte) {
 		cache, err := Decode(encoded)
 		if err != nil {

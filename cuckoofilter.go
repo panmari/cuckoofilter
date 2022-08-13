@@ -39,8 +39,8 @@ type filter[T fingerprintsize] struct {
 	count               uint
 	// Bit mask set to len(buckets) - 1. As len(buckets) is always a power of 2,
 	// applying this mask mimics the operation x % len(buckets).
-	bucketIndexMask uint
-	maxFingerprint  uint64
+	bucketIndexMask        uint
+	maxFingerprintMinusOne uint64
 }
 
 func numBuckets(numElements uint) uint {
@@ -54,6 +54,10 @@ func numBuckets(numElements uint) uint {
 	return numBuckets
 }
 
+func maxFingerprintMinusOne(fingerprintSizeBits int) uint64 {
+	return uint64((1 << fingerprintSizeBits) - 2)
+}
+
 // NewFilter returns a new cuckoofilter suitable for the given number of elements.
 // When inserting more elements, insertion speed will drop significantly and insertions might fail altogether.
 // A capacity of 1000000 is a normal default, which allocates
@@ -64,39 +68,39 @@ func NewFilter(cfg Config) Filter {
 	case Low:
 		buckets := make([]bucket[uint8], numBuckets)
 		return &filter[uint8]{
-			buckets:             buckets,
-			count:               0,
-			bucketIndexMask:     uint(len(buckets) - 1),
-			fingerprintSizeBits: 8,
-			maxFingerprint:      uint64((1 << 8) - 1),
+			buckets:                buckets,
+			count:                  0,
+			bucketIndexMask:        uint(len(buckets) - 1),
+			fingerprintSizeBits:    8,
+			maxFingerprintMinusOne: maxFingerprintMinusOne(8),
 		}
 	case High:
 		buckets := make([]bucket[uint32], numBuckets)
 		return &filter[uint32]{
-			buckets:             buckets,
-			count:               0,
-			bucketIndexMask:     uint(len(buckets) - 1),
-			fingerprintSizeBits: 32,
-			maxFingerprint:      uint64((1 << 32) - 1),
+			buckets:                buckets,
+			count:                  0,
+			bucketIndexMask:        uint(len(buckets) - 1),
+			fingerprintSizeBits:    32,
+			maxFingerprintMinusOne: maxFingerprintMinusOne(32),
 		}
 	default:
 		buckets := make([]bucket[uint16], numBuckets)
 		return &filter[uint16]{
-			buckets:             buckets,
-			count:               0,
-			bucketIndexMask:     uint(len(buckets) - 1),
-			fingerprintSizeBits: 16,
-			maxFingerprint:      uint64((1 << 16) - 1),
+			buckets:                buckets,
+			count:                  0,
+			bucketIndexMask:        uint(len(buckets) - 1),
+			fingerprintSizeBits:    16,
+			maxFingerprintMinusOne: maxFingerprintMinusOne(16),
 		}
 	}
 }
 
 func (cf *filter[T]) Lookup(data []byte) bool {
-	i1, fp := getIndexAndFingerprint[T](data, cf.bucketIndexMask, cf.maxFingerprint, cf.fingerprintSizeBits)
+	i1, fp := getIndexAndFingerprint[T](data, cf.bucketIndexMask, cf.maxFingerprintMinusOne, cf.fingerprintSizeBits)
 	if b := cf.buckets[i1]; b.contains(fp) {
 		return true
 	}
-	i2 := getAltIndex(fp, i1, cf.bucketIndexMask, cf.fingerprintSizeBits)
+	i2 := getAltIndex(fp, i1, cf.bucketIndexMask)
 	b := cf.buckets[i2]
 	return b.contains(fp)
 }
@@ -109,7 +113,7 @@ func (cf *filter[T]) Reset() {
 }
 
 func (cf *filter[T]) Insert(data []byte) bool {
-	i, fp := getIndexAndFingerprint[T](data, cf.bucketIndexMask, cf.maxFingerprint, cf.fingerprintSizeBits)
+	i, fp := getIndexAndFingerprint[T](data, cf.bucketIndexMask, cf.maxFingerprintMinusOne, cf.fingerprintSizeBits)
 	if cf.insertIntoBucket(fp, i) {
 		return true
 	}
@@ -121,7 +125,7 @@ func (cf *filter[T]) Insert(data []byte) bool {
 		cf.buckets[i][j], fp = fp, cf.buckets[i][j]
 
 		// Move kicked out fingerprint to alternate location.
-		i = getAltIndex(fp, i, cf.bucketIndexMask, cf.fingerprintSizeBits)
+		i = getAltIndex(fp, i, cf.bucketIndexMask)
 		if cf.insertIntoBucket(fp, i) {
 			return true
 		}
@@ -138,8 +142,8 @@ func (cf *filter[T]) insertIntoBucket(fp T, i uint) bool {
 }
 
 func (cf *filter[T]) Delete(data []byte) bool {
-	i1, fp := getIndexAndFingerprint[T](data, cf.bucketIndexMask, cf.maxFingerprint, cf.fingerprintSizeBits)
-	i2 := getAltIndex(fp, i1, cf.bucketIndexMask, cf.fingerprintSizeBits)
+	i1, fp := getIndexAndFingerprint[T](data, cf.bucketIndexMask, cf.maxFingerprintMinusOne, cf.fingerprintSizeBits)
+	i2 := getAltIndex(fp, i1, cf.bucketIndexMask)
 	return cf.delete(fp, i1) || cf.delete(fp, i2)
 }
 
@@ -159,12 +163,12 @@ func (cf *filter[T]) LoadFactor() float64 {
 	return float64(cf.count) / float64(len(cf.buckets)*bucketSize)
 }
 
-// TODO(panmari): Size of fingerprint needs to be derived from type. Currently hardcoded to 16 for uint16.
-const bytesPerBucket = bucketSize * 16 / 8
-
+// Encode returns a Cuckoofilter encoded as a byte slice.
 func (cf *filter[T]) Encode() []byte {
 	res := bytes.NewBuffer(nil)
-	res.Grow(len(cf.buckets) * bytesPerBucket)
+	bytesPerBucket := bucketSize * cf.fingerprintSizeBits / 8
+	res.Grow(len(cf.buckets)*bytesPerBucket + 4)
+	binary.Write(res, binary.LittleEndian, uint8(cf.fingerprintSizeBits))
 	for _, b := range cf.buckets {
 		for _, fp := range b {
 			binary.Write(res, binary.LittleEndian, fp)
@@ -174,10 +178,17 @@ func (cf *filter[T]) Encode() []byte {
 }
 
 // Decode returns a Cuckoofilter from a byte slice created using Encode.
-// TODO(panmari): This only works for uint16 at this point.
 func Decode(bytes []byte) (Filter, error) {
+	if len(bytes) == 0 {
+		return nil, fmt.Errorf("bytes can not be empty")
+	}
+	fingerprintSizeBits, bytes := int(bytes[0]), bytes[1:]
 	if len(bytes)%bucketSize != 0 {
 		return nil, fmt.Errorf("bytes must to be multiple of %d, got %d", bucketSize, len(bytes))
+	}
+	bytesPerBucket := bucketSize * fingerprintSizeBits / 8
+	if bytesPerBucket == 0 {
+		return nil, fmt.Errorf("bytesPerBucket can not be zero")
 	}
 	numBuckets := len(bytes) / bytesPerBucket
 	if numBuckets < 1 {
@@ -186,23 +197,35 @@ func Decode(bytes []byte) (Filter, error) {
 	if getNextPow2(uint64(numBuckets)) != uint(numBuckets) {
 		return nil, fmt.Errorf("numBuckets must to be a power of 2, got %d", numBuckets)
 	}
+	switch fingerprintSizeBits {
+	case 8:
+		return decode[uint8](fingerprintSizeBits, numBuckets, bytes), nil
+	case 16:
+		return decode[uint16](fingerprintSizeBits, numBuckets, bytes), nil
+	case 32:
+		return decode[uint32](fingerprintSizeBits, numBuckets, bytes), nil
+	default:
+		return nil, fmt.Errorf("fingerprint size bits must be 8, 16 or 32, got %d", fingerprintSizeBits)
+	}
+}
+
+func decode[T fingerprintsize](fingerprintSizeBits, numBuckets int, data []byte) *filter[T] {
 	var count uint
-	buckets := make([]bucket[uint16], numBuckets)
+	buckets := make([]bucket[T], numBuckets)
+	reader := bytes.NewReader(data)
 	for i, b := range buckets {
 		for j := range b {
-			var next []byte
-			next, bytes = bytes[:2], bytes[2:]
-
-			if fp := binary.LittleEndian.Uint16(next); fp != 0 {
-				buckets[i][j] = fp
+			binary.Read(reader, binary.LittleEndian, &buckets[i][j])
+			if buckets[i][j] != 0 {
 				count++
 			}
 		}
 	}
-	return &filter[uint16]{
-		buckets:             buckets,
-		count:               count,
-		bucketIndexMask:     uint(len(buckets) - 1),
-		fingerprintSizeBits: 16,
-	}, nil
+	return &filter[T]{
+		buckets:                buckets,
+		count:                  count,
+		bucketIndexMask:        uint(len(buckets) - 1),
+		fingerprintSizeBits:    fingerprintSizeBits,
+		maxFingerprintMinusOne: maxFingerprintMinusOne(fingerprintSizeBits),
+	}
 }

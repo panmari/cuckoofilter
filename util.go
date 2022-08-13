@@ -1,31 +1,30 @@
 package cuckoo
 
 import (
-	"encoding/binary"
-
 	metro "github.com/dgryski/go-metro"
 )
 
-func getAltIndex[T fingerprintsize](fp T, i uint, bucketIndexMask uint, fingerprintSizeBits int) uint {
-	b := make([]byte, fingerprintSizeBits/8)
-	binary.LittleEndian.PutUint16(b, uint16(fp))
-	hash := uint(metro.Hash64(b, 1337))
+func getAltIndex[T fingerprintsize](fp T, i uint, bucketIndexMask uint) uint {
+	// NOTE(panmari): hash was originally computed as uint(metro.Hash64(fp, 1337)).
+	// Multiplying with a constant has a similar effect and is cheaper.
+	// 0x5bd1e995 is the hash constant from MurmurHash2
+	const murmurConstant = 0x5bd1e995
+	hash := uint(fp) * murmurConstant
 	return (i ^ hash) & bucketIndexMask
 }
 
-func getFingerprint[T fingerprintsize](hash, maxFingerprint uint64, fingerprintSizeBits int) T {
-	// maxFingerprint := uint64((1 << fingerprintSizeBits) - 1)
+func getFingerprint[T fingerprintsize](hash, maxFingerprintMinusOne uint64, fingerprintSizeBits int) T {
 	// Use most significant bits for fingerprint.
 	shifted := hash >> (64 - fingerprintSizeBits)
 	// Valid fingerprints are in range [1, maxFingerprint], leaving 0 as the special empty state.
-	fp := shifted%(maxFingerprint-1) + 1
+	fp := shifted%(maxFingerprintMinusOne) + 1
 	return T(fp)
 }
 
 // getIndexAndFingerprint returns the primary bucket index and fingerprint to be used
-func getIndexAndFingerprint[T fingerprintsize](data []byte, bucketIndexMask uint, maxFingerprint uint64, fingerprintSize int) (uint, T) {
+func getIndexAndFingerprint[T fingerprintsize](data []byte, bucketIndexMask uint, maxFingerprintMinusOne uint64, fingerprintSize int) (uint, T) {
 	hash := metro.Hash64(data, 1337)
-	f := getFingerprint[T](hash, maxFingerprint, fingerprintSize)
+	f := getFingerprint[T](hash, maxFingerprintMinusOne, fingerprintSize)
 	// Use least significant bits for deriving index.
 	i1 := uint(hash) & bucketIndexMask
 	return i1, f

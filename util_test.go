@@ -9,9 +9,9 @@ func TestIndexAndFP(t *testing.T) {
 	data := []byte("seif")
 	numBuckets := uint(1024)
 	i1, fp := getIndexAndFingerprint[uint16](data, numBuckets, uint64((1<<fingerprintSizeBits)-1), fingerprintSizeBits)
-	i2 := getAltIndex(fp, i1, numBuckets, fingerprintSizeBits)
-	i11 := getAltIndex(fp, i2, numBuckets, fingerprintSizeBits)
-	i22 := getAltIndex(fp, i1, numBuckets, fingerprintSizeBits)
+	i2 := getAltIndex(fp, i1, numBuckets)
+	i11 := getAltIndex(fp, i2, numBuckets)
+	i22 := getAltIndex(fp, i1, numBuckets)
 	if i1 != i11 {
 		t.Errorf("Expected i1 == i11, instead %d != %d", i1, i11)
 	}
