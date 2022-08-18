@@ -170,11 +170,10 @@ func (cf *filter[T]) LoadFactor() float64 {
 	return float64(cf.count) / float64(len(cf.buckets)*bucketSize)
 }
 
-// Encode returns a Cuckoofilter encoded as a byte slice.
 func (cf *filter[T]) Encode() []byte {
-	res := bytes.NewBuffer(nil)
+	res := new(bytes.Buffer)
 	bytesPerBucket := bucketSize * cf.fingerprintSizeBits / 8
-	res.Grow(len(cf.buckets)*bytesPerBucket + 4)
+	res.Grow(len(cf.buckets)*bytesPerBucket + 1)
 	binary.Write(res, binary.LittleEndian, uint8(cf.fingerprintSizeBits))
 	for _, b := range cf.buckets {
 		for _, fp := range b {
