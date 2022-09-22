@@ -107,7 +107,6 @@ func TestFilter_Insert(t *testing.T) {
 	rng := rand.New(rand.NewSource(int64(42)))
 
 	hash := make([]byte, 32)
-
 	for i := 0; i < 100; i++ {
 		rng.Read(hash)
 		filter.Insert(hash)
