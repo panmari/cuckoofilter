@@ -10,6 +10,9 @@ func getAltIndex[T fingerprintsize](fp T, i uint, bucketIndexMask uint) uint {
 	// 0x5bd1e995 is the hash constant from MurmurHash2
 	const murmurConstant = 0x5bd1e995
 	hash := uint(fp) * murmurConstant
+	// bytes := make([]byte, binary.MaxVarintLen32)
+	// binary.PutUvarint(bytes, uint64(fp))
+	// hash := uint(metro.Hash64(bytes, 1337))
 	return (i ^ hash) & bucketIndexMask
 }
 
@@ -24,10 +27,10 @@ func getFingerprint[T fingerprintsize](hash, maxFingerprintMinusOne uint64, fing
 // getIndexAndFingerprint returns the primary bucket index and fingerprint to be used
 func getIndexAndFingerprint[T fingerprintsize](data []byte, bucketIndexMask uint, maxFingerprintMinusOne uint64, fingerprintSize int) (uint, T) {
 	hash := metro.Hash64(data, 1337)
-	f := getFingerprint[T](hash, maxFingerprintMinusOne, fingerprintSize)
+	fp := getFingerprint[T](hash, maxFingerprintMinusOne, fingerprintSize)
 	// Use least significant bits for deriving index.
 	i1 := uint(hash) & bucketIndexMask
-	return i1, f
+	return i1, fp
 }
 
 func getNextPow2(n uint64) uint {
