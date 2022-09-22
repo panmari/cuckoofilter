@@ -66,29 +66,26 @@ func NewFilter(cfg Config) Filter {
 	numBuckets := numBuckets(cfg.NumElements)
 	switch cfg.Precision {
 	case Low:
-		buckets := make([]bucket[uint8], numBuckets)
 		return &filter[uint8]{
-			buckets:                buckets,
+			buckets:                make([]bucket[uint8], numBuckets),
 			count:                  0,
-			bucketIndexMask:        uint(len(buckets) - 1),
+			bucketIndexMask:        uint(numBuckets - 1),
 			fingerprintSizeBits:    8,
 			maxFingerprintMinusOne: maxFingerprintMinusOne(8),
 		}
 	case High:
-		buckets := make([]bucket[uint32], numBuckets)
 		return &filter[uint32]{
-			buckets:                buckets,
+			buckets:                make([]bucket[uint32], numBuckets),
 			count:                  0,
-			bucketIndexMask:        uint(len(buckets) - 1),
+			bucketIndexMask:        uint(numBuckets - 1),
 			fingerprintSizeBits:    32,
 			maxFingerprintMinusOne: maxFingerprintMinusOne(32),
 		}
 	default:
-		buckets := make([]bucket[uint16], numBuckets)
 		return &filter[uint16]{
-			buckets:                buckets,
+			buckets:                make([]bucket[uint16], numBuckets),
 			count:                  0,
-			bucketIndexMask:        uint(len(buckets) - 1),
+			bucketIndexMask:        uint(numBuckets - 1),
 			fingerprintSizeBits:    16,
 			maxFingerprintMinusOne: maxFingerprintMinusOne(16),
 		}
