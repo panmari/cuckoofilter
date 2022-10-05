@@ -181,32 +181,32 @@ func (cf *filter[T]) Encode() []byte {
 }
 
 // Decode returns a Cuckoofilter from a byte slice created using Encode.
-func Decode(bytes []byte) (Filter, error) {
-	if len(bytes) == 0 {
-		return nil, fmt.Errorf("bytes can not be empty")
+func Decode(data []byte) (Filter, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("data can not be empty")
 	}
-	fingerprintSizeBits, bytes := int(bytes[0]), bytes[1:]
-	if len(bytes)%bucketSize != 0 {
-		return nil, fmt.Errorf("bytes must to be multiple of %d, got %d", bucketSize, len(bytes))
+	fingerprintSizeBits, data := int(data[0]), data[1:]
+	if len(data)%bucketSize != 0 {
+		return nil, fmt.Errorf("data must to be multiple of %d, got %d", bucketSize, len(data))
 	}
 	bytesPerBucket := bucketSize * fingerprintSizeBits / 8
 	if bytesPerBucket == 0 {
 		return nil, fmt.Errorf("bytesPerBucket can not be zero")
 	}
-	numBuckets := len(bytes) / bytesPerBucket
+	numBuckets := len(data) / bytesPerBucket
 	if numBuckets < 1 {
-		return nil, fmt.Errorf("bytes can not be smaller than %d, size in bytes is %d", bytesPerBucket, len(bytes))
+		return nil, fmt.Errorf("data can not be smaller than %d, size in bytes is %d", bytesPerBucket, len(data))
 	}
 	if getNextPow2(uint64(numBuckets)) != uint(numBuckets) {
 		return nil, fmt.Errorf("numBuckets must to be a power of 2, got %d", numBuckets)
 	}
 	switch fingerprintSizeBits {
 	case 8:
-		return decode[uint8](fingerprintSizeBits, numBuckets, bytes), nil
+		return decode[uint8](fingerprintSizeBits, numBuckets, data), nil
 	case 16:
-		return decode[uint16](fingerprintSizeBits, numBuckets, bytes), nil
+		return decode[uint16](fingerprintSizeBits, numBuckets, data), nil
 	case 32:
-		return decode[uint32](fingerprintSizeBits, numBuckets, bytes), nil
+		return decode[uint32](fingerprintSizeBits, numBuckets, data), nil
 	default:
 		return nil, fmt.Errorf("fingerprint size bits must be 8, 16 or 32, got %d", fingerprintSizeBits)
 	}
