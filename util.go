@@ -1,42 +1,36 @@
 package cuckoo
 
 import (
-	"encoding/binary"
-	"math/rand"
-
 	metro "github.com/dgryski/go-metro"
 )
 
-// randi returns either i1 or i2 randomly.
-func randi(i1, i2 uint) uint {
-	if rand.Int31()%2 == 0 {
-		return i1
-	}
-	return i2
-}
-
-func getAltIndex(fp fingerprint, i uint, bucketIndexMask uint) uint {
-	b := make([]byte, 2)
-	binary.LittleEndian.PutUint16(b, uint16(fp))
-	hash := uint(metro.Hash64(b, 1337))
+func getAltIndex[T fingerprintsize](fp T, i uint, bucketIndexMask uint) uint {
+	// NOTE(panmari): hash was originally computed as uint(metro.Hash64(fp, 1337)).
+	// Multiplying with a constant has a similar effect and is cheaper.
+	// 0x5bd1e995 is the hash constant from MurmurHash2
+	const murmurConstant = 0x5bd1e995
+	hash := uint(fp) * murmurConstant
+	// bytes := make([]byte, binary.MaxVarintLen32)
+	// binary.PutUvarint(bytes, uint64(fp))
+	// hash := uint(metro.Hash64(bytes, 1337))
 	return (i ^ hash) & bucketIndexMask
 }
 
-func getFingerprint(hash uint64) fingerprint {
+func getFingerprint[T fingerprintsize](hash, maxFingerprintMinusOne uint64, fingerprintSizeBits int) T {
 	// Use most significant bits for fingerprint.
 	shifted := hash >> (64 - fingerprintSizeBits)
 	// Valid fingerprints are in range [1, maxFingerprint], leaving 0 as the special empty state.
-	fp := shifted%(maxFingerprint-1) + 1
-	return fingerprint(fp)
+	fp := shifted%(maxFingerprintMinusOne) + 1
+	return T(fp)
 }
 
 // getIndexAndFingerprint returns the primary bucket index and fingerprint to be used
-func getIndexAndFingerprint(data []byte, bucketIndexMask uint) (uint, fingerprint) {
+func getIndexAndFingerprint[T fingerprintsize](data []byte, bucketIndexMask uint, maxFingerprintMinusOne uint64, fingerprintSize int) (uint, T) {
 	hash := metro.Hash64(data, 1337)
-	f := getFingerprint(hash)
+	fp := getFingerprint[T](hash, maxFingerprintMinusOne, fingerprintSize)
 	// Use least significant bits for deriving index.
 	i1 := uint(hash) & bucketIndexMask
-	return i1, f
+	return i1, fp
 }
 
 func getNextPow2(n uint64) uint {

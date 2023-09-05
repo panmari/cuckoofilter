@@ -9,7 +9,7 @@ import (
 
 // Small wrapper around cuckoo filter making it thread safe.
 type threadSafeFilter struct {
-	cf *cuckoo.Filter
+	cf cuckoo.Filter
 	mu sync.RWMutex
 }
 
@@ -29,7 +29,7 @@ func (f *threadSafeFilter) lookup(item []byte) bool {
 
 func Example_threadSafe() {
 	cf := &threadSafeFilter{
-		cf: cuckoo.NewFilter(1000),
+		cf: cuckoo.NewFilter(cuckoo.Config{NumElements: 1000}),
 	}
 
 	var wg sync.WaitGroup

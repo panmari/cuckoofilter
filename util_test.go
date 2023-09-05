@@ -5,9 +5,10 @@ import (
 )
 
 func TestIndexAndFP(t *testing.T) {
+	const fingerprintSizeBits = 16
 	data := []byte("seif")
 	numBuckets := uint(1024)
-	i1, fp := getIndexAndFingerprint(data, numBuckets)
+	i1, fp := getIndexAndFingerprint[uint16](data, numBuckets, uint64((1<<fingerprintSizeBits)-1), fingerprintSizeBits)
 	i2 := getAltIndex(fp, i1, numBuckets)
 	i11 := getAltIndex(fp, i2, numBuckets)
 	i22 := getAltIndex(fp, i1, numBuckets)

@@ -7,7 +7,7 @@ import (
 )
 
 func Example() {
-	cf := cuckoo.NewFilter(1000)
+	cf := cuckoo.NewFilter(cuckoo.Config{NumElements: 1000})
 
 	cf.Insert([]byte("pizza"))
 	cf.Insert([]byte("tacos"))
@@ -25,7 +25,7 @@ func Example() {
 }
 
 func ExampleFilter_Lookup() {
-	cf := cuckoo.NewFilter(1000)
+	cf := cuckoo.NewFilter(cuckoo.Config{NumElements: 1000})
 
 	cf.Insert([]byte("pizza"))
 	cf.Insert([]byte("tacos"))
@@ -38,7 +38,7 @@ func ExampleFilter_Lookup() {
 }
 
 func ExampleFilter_Delete() {
-	cf := cuckoo.NewFilter(1000)
+	cf := cuckoo.NewFilter(cuckoo.Config{NumElements: 1000})
 
 	cf.Insert([]byte("pizza"))
 	cf.Insert([]byte("tacos"))

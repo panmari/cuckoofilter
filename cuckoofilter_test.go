@@ -19,7 +19,7 @@ var optFloatNear = cmp.Comparer(func(x, y float64) bool {
 })
 
 func TestInsertion(t *testing.T) {
-	cf := NewFilter(1000000)
+	cf := NewFilter(Config{NumElements: 1000000})
 	fd, err := os.Open("/usr/share/dict/words")
 	if err != nil {
 		t.Skipf("failed reading words: %v", err)
@@ -56,7 +56,7 @@ func TestInsertion(t *testing.T) {
 }
 
 func TestLookup(t *testing.T) {
-	cf := NewFilter(4)
+	cf := NewFilter(Config{NumElements: 4})
 	cf.Insert([]byte("one"))
 	cf.Insert([]byte("two"))
 	cf.Insert([]byte("three"))
@@ -85,7 +85,7 @@ func TestLookup(t *testing.T) {
 func TestFilter_LookupLarge(t *testing.T) {
 	const size = 10000
 	insertFail := 0
-	cf := NewFilter(size)
+	cf := NewFilter(Config{NumElements: size})
 	for i := 0; i < size; i++ {
 		if !cf.Insert([]byte{byte(i)}) {
 			insertFail++
@@ -104,7 +104,7 @@ func TestFilter_LookupLarge(t *testing.T) {
 }
 
 func TestFilter_Insert(t *testing.T) {
-	filter := NewFilter(10000)
+	filter := NewFilter(Config{NumElements: 10000})
 	rng := rand.New(rand.NewSource(int64(42)))
 
 	hash := make([]byte, 32)
@@ -119,9 +119,7 @@ func TestFilter_Insert(t *testing.T) {
 }
 
 func BenchmarkFilter_Reset(b *testing.B) {
-	const cap = 10000
-	filter := NewFilter(cap)
-
+	filter := NewFilter(Config{NumElements: 10000})
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -150,7 +148,7 @@ func BenchmarkFilter_Insert(b *testing.B) {
 
 	for i := 0; i < b.N; {
 		b.StopTimer()
-		filter := NewFilter(size)
+		filter := NewFilter(Config{NumElements: size})
 		b.StartTimer()
 		for _, k := range keys {
 			filter.Insert(k)
@@ -160,10 +158,10 @@ func BenchmarkFilter_Insert(b *testing.B) {
 }
 
 func BenchmarkFilter_Lookup(b *testing.B) {
-	f := NewFilter(10000)
+	filter := NewFilter(Config{NumElements: 10000})
 	keys := benchmarkKeys(b, 10000)
 	for _, k := range keys {
-		f.Insert(k)
+		filter.Insert(k)
 	}
 	// One half is likely missing, other half is present.
 	lookupKeys := append(benchmarkKeys(b, 1000), keys[0:1000]...)
@@ -173,15 +171,15 @@ func BenchmarkFilter_Lookup(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; {
-		for _, k := range lookupKeys {
-			f.Lookup(k)
+		for _, k := range keys {
+			filter.Lookup(k)
 			i++
 		}
 	}
 }
 
 func TestDelete(t *testing.T) {
-	cf := NewFilter(8)
+	cf := NewFilter(Config{NumElements: 8})
 	cf.Insert([]byte("one"))
 	cf.Insert([]byte("two"))
 	cf.Insert([]byte("three"))
@@ -206,7 +204,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestDeleteMultipleSame(t *testing.T) {
-	cf := NewFilter(4)
+	cf := NewFilter(Config{NumElements: 10})
 	for i := 0; i < 5; i++ {
 		if !cf.Insert([]byte("some_item")) {
 			t.Error("Failed insert during setup.")
@@ -238,22 +236,32 @@ func TestDeleteMultipleSame(t *testing.T) {
 }
 
 func TestEncodeDecode(t *testing.T) {
-	cf := NewFilter(10)
-	cf.Insert([]byte{1})
-	cf.Insert([]byte{2})
-	cf.Insert([]byte{3})
-	cf.Insert([]byte{4})
-	cf.Insert([]byte{5})
-	cf.Insert([]byte{6})
-	cf.Insert([]byte{7})
-	cf.Insert([]byte{8})
-	cf.Insert([]byte{9})
-	encoded := cf.Encode()
-	got, err := Decode(encoded)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
+	testCases := []struct {
+		filter Filter
+	}{
+		{NewFilter(Config{NumElements: 10})},
+		{NewFilter(Config{NumElements: 10, Precision: Low})},
+		{NewFilter(Config{NumElements: 10, Precision: High})},
 	}
-	if !cmp.Equal(cf, got, cmp.AllowUnexported(Filter{})) {
-		t.Errorf("Decode = %v, want %v, encoded = %v", got, cf, encoded)
+	for _, tc := range testCases {
+		cf := tc.filter
+		cf.Insert([]byte{1})
+		cf.Insert([]byte{2})
+		cf.Insert([]byte{3})
+		cf.Insert([]byte{4})
+		cf.Insert([]byte{5})
+		cf.Insert([]byte{6})
+		cf.Insert([]byte{7})
+		cf.Insert([]byte{8})
+		cf.Insert([]byte{9})
+		encoded := cf.Encode()
+		got, err := Decode(encoded)
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
+		if !cmp.Equal(cf, got,
+			cmp.AllowUnexported(filter[uint8]{}, filter[uint16]{}, filter[uint32]{})) {
+			t.Errorf("Decode = %v, want %v, encoded = %v", got, cf, encoded)
+		}
 	}
 }

@@ -5,22 +5,21 @@ import (
 	"fmt"
 )
 
-// fingerprint represents a single entry in a bucket.
-type fingerprint uint16
+type fingerprintsize interface {
+	uint8 | uint16 | uint32
+}
 
 // bucket keeps track of fingerprints hashing to the same index.
-type bucket [bucketSize]fingerprint
+type bucket[T fingerprintsize] [bucketSize]T
 
 const (
-	nullFp              = 0
-	bucketSize          = 4
-	fingerprintSizeBits = 16
-	maxFingerprint      = (1 << fingerprintSizeBits) - 1
+	nullFp     = 0
+	bucketSize = 4
 )
 
 // insert a fingerprint into a bucket. Returns true if there was enough space and insertion succeeded.
 // Note it allows inserting the same fingerprint multiple times.
-func (b *bucket) insert(fp fingerprint) bool {
+func (b *bucket[T]) insert(fp T) bool {
 	for i, tfp := range b {
 		if tfp == nullFp {
 			b[i] = fp
@@ -32,7 +31,7 @@ func (b *bucket) insert(fp fingerprint) bool {
 
 // delete a fingerprint from a bucket.
 // Returns true if the fingerprint was present and successfully removed.
-func (b *bucket) delete(fp fingerprint) bool {
+func (b *bucket[T]) delete(fp T) bool {
 	for i, tfp := range b {
 		if tfp == fp {
 			b[i] = nullFp
@@ -42,7 +41,7 @@ func (b *bucket) delete(fp fingerprint) bool {
 	return false
 }
 
-func (b *bucket) contains(needle fingerprint) bool {
+func (b *bucket[T]) contains(needle T) bool {
 	for _, fp := range b {
 		if fp == needle {
 			return true
@@ -52,13 +51,13 @@ func (b *bucket) contains(needle fingerprint) bool {
 }
 
 // reset deletes all fingerprints in the bucket.
-func (b *bucket) reset() {
+func (b *bucket[T]) reset() {
 	for i := range b {
 		b[i] = nullFp
 	}
 }
 
-func (b *bucket) String() string {
+func (b *bucket[T]) String() string {
 	var buf bytes.Buffer
 	buf.WriteString("[")
 	for _, by := range b {
