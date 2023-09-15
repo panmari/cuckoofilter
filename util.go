@@ -2,14 +2,19 @@ package cuckoo
 
 import (
 	"encoding/binary"
-	"math/rand"
+	_ "unsafe" // For linking fastrand.
 
 	metro "github.com/dgryski/go-metro"
 )
 
+// fastrand is a fast thread local random function.
+//
+//go:linkname fastrand runtime.fastrand
+func fastrand() uint32
+
 // randi returns either i1 or i2 randomly.
 func randi(i1, i2 uint) uint {
-	if rand.Int31()%2 == 0 {
+	if fastrand()%2 == 0 {
 		return i1
 	}
 	return i2
