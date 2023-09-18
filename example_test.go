@@ -3,7 +3,7 @@ package cuckoo_test
 import (
 	"fmt"
 
-	cuckoo "github.com/panmari/cuckoofilter"
+	cuckoo "github.com/livekit/cuckoofilter"
 )
 
 func Example() {

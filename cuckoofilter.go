@@ -1,10 +1,10 @@
 package cuckoo
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
-	"math/rand"
+
+	"github.com/zeebo/wyhash"
 )
 
 // maxCuckooKickouts is the maximum number of times reinsert
@@ -18,6 +18,7 @@ type Filter struct {
 	// Bit mask set to len(buckets) - 1. As len(buckets) is always a power of 2,
 	// applying this mask mimics the operation x % len(buckets).
 	bucketIndexMask uint
+	rng             wyhash.RNG
 }
 
 // NewFilter returns a new cuckoofilter suitable for the given number of elements.
@@ -36,7 +37,7 @@ func NewFilter(numElements uint) *Filter {
 	return &Filter{
 		buckets:         buckets,
 		count:           0,
-		bucketIndexMask: uint(len(buckets) - 1),
+		bucketIndexMask: numBuckets - 1,
 	}
 }
 
@@ -72,7 +73,11 @@ func (cf *Filter) Insert(data []byte) bool {
 	if cf.insert(fp, i2) {
 		return true
 	}
-	return cf.reinsert(fp, randi(i1, i2))
+	if cf.rng.Uint64()&1 == 0 {
+		return cf.reinsert(fp, i1)
+	} else {
+		return cf.reinsert(fp, i2)
+	}
 }
 
 func (cf *Filter) insert(fp fingerprint, i uint) bool {
@@ -85,9 +90,9 @@ func (cf *Filter) insert(fp fingerprint, i uint) bool {
 
 func (cf *Filter) reinsert(fp fingerprint, i uint) bool {
 	for k := 0; k < maxCuckooKickouts; k++ {
-		j := rand.Intn(bucketSize)
+		j := cf.rng.Uint64() & (bucketSize - 1)
 		// Swap fingerprint with bucket entry.
-		cf.buckets[i][j], fp = fp, cf.buckets[i][j]
+		fp = cf.buckets[i].swap(j, fp)
 
 		// Move kicked out fingerprint to alternate location.
 		i = getAltIndex(fp, i, cf.bucketIndexMask)
@@ -127,44 +132,36 @@ const bytesPerBucket = bucketSize * fingerprintSizeBits / 8
 
 // Encode returns a byte slice representing a Cuckoofilter.
 func (cf *Filter) Encode() []byte {
-	res := new(bytes.Buffer)
-	res.Grow(len(cf.buckets) * bytesPerBucket)
-
+	buf := make([]byte, 0, len(cf.buckets)*bytesPerBucket+8)
 	for _, b := range cf.buckets {
-		for _, fp := range b {
-			binary.Write(res, binary.LittleEndian, fp)
-		}
+		buf = binary.LittleEndian.AppendUint64(buf, uint64(b))
 	}
-	return res.Bytes()
+	buf = binary.LittleEndian.AppendUint64(buf, uint64(cf.rng))
+	return buf
 }
 
 // Decode returns a Cuckoofilter from a byte slice created using Encode.
 func Decode(data []byte) (*Filter, error) {
-	if len(data)%bucketSize != 0 {
-		return nil, fmt.Errorf("bytes must to be multiple of %d, got %d", bucketSize, len(data))
-	}
-	numBuckets := len(data) / bytesPerBucket
+	numBuckets := (len(data) - 8) / bytesPerBucket
 	if numBuckets < 1 {
 		return nil, fmt.Errorf("bytes can not be smaller than %d, size in bytes is %d", bytesPerBucket, len(data))
 	}
 	if getNextPow2(uint64(numBuckets)) != uint(numBuckets) {
 		return nil, fmt.Errorf("numBuckets must to be a power of 2, got %d", numBuckets)
 	}
-	var count uint
-	buckets := make([]bucket, numBuckets)
-	reader := bytes.NewReader(data)
 
-	for i, b := range buckets {
-		for j := range b {
-			binary.Read(reader, binary.LittleEndian, &buckets[i][j])
-			if buckets[i][j] != nullFp {
-				count++
-			}
-		}
+	var count, pos uint
+	buckets := make([]bucket, numBuckets)
+	for i := range buckets {
+		buckets[i] = bucket(binary.LittleEndian.Uint64(data[pos:]))
+		pos += 8
+		count += bucketSize - buckets[i].nullsCount()
 	}
+	rng := binary.LittleEndian.Uint64(data[pos:])
 	return &Filter{
 		buckets:         buckets,
 		count:           count,
 		bucketIndexMask: uint(len(buckets) - 1),
+		rng:             wyhash.RNG(rng),
 	}, nil
 }

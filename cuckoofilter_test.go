@@ -239,15 +239,9 @@ func TestDeleteMultipleSame(t *testing.T) {
 
 func TestEncodeDecode(t *testing.T) {
 	cf := NewFilter(10)
-	cf.Insert([]byte{1})
-	cf.Insert([]byte{2})
-	cf.Insert([]byte{3})
-	cf.Insert([]byte{4})
-	cf.Insert([]byte{5})
-	cf.Insert([]byte{6})
-	cf.Insert([]byte{7})
-	cf.Insert([]byte{8})
-	cf.Insert([]byte{9})
+	for i := 0; i < 16; i++ {
+		cf.Insert([]byte{byte(i)})
+	}
 	encoded := cf.Encode()
 	got, err := Decode(encoded)
 	if err != nil {
