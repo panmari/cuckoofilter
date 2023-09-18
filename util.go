@@ -9,12 +9,12 @@ import (
 
 // fastrand is a fast thread local random function.
 //
-//go:linkname fastrand runtime.fastrand
-func fastrand() uint32
+//go:linkname fastrandn runtime.fastrandn
+func fastrandn(n uint32) uint32
 
 // randi returns either i1 or i2 randomly.
 func randi(i1, i2 uint) uint {
-	if fastrand()%2 == 0 {
+	if fastrandn(2) == 0 {
 		return i1
 	}
 	return i2
