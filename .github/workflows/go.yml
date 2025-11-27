@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: [ '1.15', '>=1.5 <2']
+        go: [ '1.21', '>=1.21 <2']
     steps:
     - uses: actions/checkout@v4
 
