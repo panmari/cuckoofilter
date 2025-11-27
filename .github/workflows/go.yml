@@ -1,10 +1,11 @@
-name: Go
+name: Go Build, Vet, Test
 
 on:
   push:
     branches: [ master ]
   pull_request:
     branches: [ master ]
+  workflow_dispatch:
 
 jobs:
   build_vet_test:
