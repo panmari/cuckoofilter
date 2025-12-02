@@ -14,7 +14,7 @@ jobs:
       matrix:
         go: [ '1.21', '>=1.21 <2']
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Go ${{ matrix.go }} 
       uses: actions/setup-go@v5
